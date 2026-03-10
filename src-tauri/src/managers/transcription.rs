@@ -485,22 +485,36 @@ impl TranscriptionManager {
                 || -> Result<transcribe_rs::TranscriptionResult> {
                     match &mut engine {
                         LoadedEngine::Whisper(whisper_engine) => {
-                            let whisper_language = if settings.selected_language == "auto" {
-                                None
-                            } else {
-                                let normalized = if settings.selected_language == "zh-Hans"
-                                    || settings.selected_language == "zh-Hant"
-                                {
+                            let langs = &settings.selected_languages;
+
+                            let (whisper_language, initial_prompt) = if langs.len() == 1
+                                && langs[0] == "auto"
+                            {
+                                // Auto-detect from all languages, no prompt biasing
+                                (None, None)
+                            } else if langs.len() == 1 {
+                                // Single explicit language — force it (current behavior)
+                                let normalized = if langs[0] == "zh-Hans" || langs[0] == "zh-Hant" {
                                     "zh".to_string()
                                 } else {
-                                    settings.selected_language.clone()
+                                    langs[0].clone()
                                 };
-                                Some(normalized)
+                                (Some(normalized), None)
+                            } else {
+                                // Multiple languages — auto-detect + initial_prompt biasing
+                                let prompt = settings
+                                    .custom_initial_prompt
+                                    .as_ref()
+                                    .filter(|p| !p.trim().is_empty())
+                                    .cloned()
+                                    .or_else(|| crate::prompt_bank::get_initial_prompt(langs));
+                                (None, prompt)
                             };
 
                             let params = WhisperInferenceParams {
                                 language: whisper_language,
                                 translate: settings.translate_to_english,
+                                initial_prompt,
                                 ..Default::default()
                             };
 
@@ -528,13 +542,19 @@ impl TranscriptionManager {
                                 anyhow::anyhow!("Moonshine streaming transcription failed: {}", e)
                             }),
                         LoadedEngine::SenseVoice(sense_voice_engine) => {
-                            let language = match settings.selected_language.as_str() {
-                                "zh" | "zh-Hans" | "zh-Hant" => SenseVoiceLanguage::Chinese,
-                                "en" => SenseVoiceLanguage::English,
-                                "ja" => SenseVoiceLanguage::Japanese,
-                                "ko" => SenseVoiceLanguage::Korean,
-                                "yue" => SenseVoiceLanguage::Cantonese,
-                                _ => SenseVoiceLanguage::Auto,
+                            let langs = &settings.selected_languages;
+                            let language = if langs.len() > 1 {
+                                // Multiple languages selected — use auto-detect
+                                SenseVoiceLanguage::Auto
+                            } else {
+                                match langs.first().map(|s| s.as_str()).unwrap_or("auto") {
+                                    "zh" | "zh-Hans" | "zh-Hant" => SenseVoiceLanguage::Chinese,
+                                    "en" => SenseVoiceLanguage::English,
+                                    "ja" => SenseVoiceLanguage::Japanese,
+                                    "ko" => SenseVoiceLanguage::Korean,
+                                    "yue" => SenseVoiceLanguage::Cantonese,
+                                    _ => SenseVoiceLanguage::Auto,
+                                }
                             };
                             let params = SenseVoiceInferenceParams {
                                 language,

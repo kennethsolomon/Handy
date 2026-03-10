@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- **Multi-language transcription**: Select multiple languages for code-switching support (e.g., Taglish)
+- Language pair presets (Taglish) with optimized Whisper initial prompts
+- Custom initial prompt setting for advanced users to bias Whisper transcription
+- Language-aware post-processing context for LLM prompts
+- "Taglish Cleanup" post-processing preset
+- Prompt bank with sample text for 15 languages and 3 code-switching pairs
+
+### Changed
+
+- Language selector redesigned as multi-select with chip tags, search, and presets
+- Settings migrated from `selected_language` (string) to `selected_languages` (array) with backward compatibility
+
 ## [0.3.0] - 2025-07-11
 
 ### Added

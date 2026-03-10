@@ -107,3 +107,13 @@ export const LANGUAGES: Language[] = [
   { value: "jw", label: "Javanese" },
   { value: "su", label: "Sundanese" },
 ];
+
+export interface LanguagePreset {
+  id: string;
+  label: string;
+  languages: string[];
+}
+
+export const LANGUAGE_PRESETS: LanguagePreset[] = [
+  { id: "taglish", label: "Taglish", languages: ["tl", "en"] },
+];

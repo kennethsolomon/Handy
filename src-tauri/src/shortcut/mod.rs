@@ -523,11 +523,64 @@ pub fn change_translate_to_english_setting(app: AppHandle, enabled: bool) -> Res
     Ok(())
 }
 
+/// Maximum number of languages that can be selected simultaneously.
+const MAX_SELECTED_LANGUAGES: usize = 20;
+
+/// Maximum length (in characters) for a custom initial prompt.
+const MAX_INITIAL_PROMPT_LENGTH: usize = 2000;
+
+/// Validate that a language code is well-formed (e.g., "en", "zh-Hans", "auto").
+fn is_valid_language_code(code: &str) -> bool {
+    !code.is_empty()
+        && code.len() <= 10
+        && code
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
 #[tauri::command]
 #[specta::specta]
-pub fn change_selected_language_setting(app: AppHandle, language: String) -> Result<(), String> {
+pub fn change_selected_languages_setting(
+    app: AppHandle,
+    languages: Vec<String>,
+) -> Result<(), String> {
+    if languages.is_empty() {
+        return Err("At least one language must be selected".to_string());
+    }
+    if languages.len() > MAX_SELECTED_LANGUAGES {
+        return Err(format!(
+            "Too many languages selected (max {})",
+            MAX_SELECTED_LANGUAGES
+        ));
+    }
+    for code in &languages {
+        if !is_valid_language_code(code) {
+            return Err(format!("Invalid language code: '{}'", code));
+        }
+    }
+
     let mut settings = settings::get_settings(&app);
-    settings.selected_language = language;
+    settings.selected_languages = languages;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_custom_initial_prompt_setting(
+    app: AppHandle,
+    prompt: Option<String>,
+) -> Result<(), String> {
+    let prompt = prompt.map(|p| {
+        if p.chars().count() > MAX_INITIAL_PROMPT_LENGTH {
+            p.chars().take(MAX_INITIAL_PROMPT_LENGTH).collect()
+        } else {
+            p
+        }
+    });
+
+    let mut settings = settings::get_settings(&app);
+    settings.custom_initial_prompt = prompt;
     settings::write_settings(&app, settings);
     Ok(())
 }

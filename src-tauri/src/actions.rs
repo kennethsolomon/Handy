@@ -52,8 +52,46 @@ fn strip_invisible_chars(s: &str) -> String {
 
 /// Build a system prompt from the user's prompt template.
 /// Removes `${output}` placeholder since the transcription is sent as the user message.
-fn build_system_prompt(prompt_template: &str) -> String {
-    prompt_template.replace("${output}", "").trim().to_string()
+/// When multiple languages are selected, appends language context to help the LLM.
+fn build_system_prompt(prompt_template: &str, selected_languages: &[String]) -> String {
+    let mut prompt = prompt_template.replace("${output}", "").trim().to_string();
+
+    // Append language context when multiple languages are selected
+    if selected_languages.len() > 1 {
+        let lang_names: Vec<&str> = selected_languages
+            .iter()
+            .filter_map(|code| language_code_to_name(code))
+            .collect();
+        if lang_names.len() > 1 {
+            prompt.push_str(&format!(
+                "\n\nNote: This transcription may contain multiple languages ({}).",
+                lang_names.join(" and ")
+            ));
+        }
+    }
+
+    prompt
+}
+
+fn language_code_to_name(code: &str) -> Option<&'static str> {
+    match code {
+        "en" => Some("English"),
+        "tl" => Some("Tagalog"),
+        "es" => Some("Spanish"),
+        "fr" => Some("French"),
+        "de" => Some("German"),
+        "ja" => Some("Japanese"),
+        "ko" => Some("Korean"),
+        "zh" | "zh-Hans" | "zh-Hant" => Some("Chinese"),
+        "pt" => Some("Portuguese"),
+        "it" => Some("Italian"),
+        "ru" => Some("Russian"),
+        "hi" => Some("Hindi"),
+        "vi" => Some("Vietnamese"),
+        "ar" => Some("Arabic"),
+        "th" => Some("Thai"),
+        _ => None,
+    }
 }
 
 async fn post_process_transcription(settings: &AppSettings, transcription: &str) -> Option<String> {
@@ -121,7 +159,7 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
     if provider.supports_structured_output {
         debug!("Using structured outputs for provider '{}'", provider.id);
 
-        let system_prompt = build_system_prompt(&prompt);
+        let system_prompt = build_system_prompt(&prompt, &settings.selected_languages);
         let user_content = transcription.to_string();
 
         // Handle Apple Intelligence separately since it uses native Swift APIs
@@ -269,17 +307,17 @@ async fn maybe_convert_chinese_variant(
     transcription: &str,
 ) -> Option<String> {
     // Check if language is set to Simplified or Traditional Chinese
-    let is_simplified = settings.selected_language == "zh-Hans";
-    let is_traditional = settings.selected_language == "zh-Hant";
+    let is_simplified = settings.selected_languages.contains(&"zh-Hans".to_string());
+    let is_traditional = settings.selected_languages.contains(&"zh-Hant".to_string());
 
     if !is_simplified && !is_traditional {
-        debug!("selected_language is not Simplified or Traditional Chinese; skipping translation");
+        debug!("selected_languages does not contain Simplified or Traditional Chinese; skipping translation");
         return None;
     }
 
     debug!(
-        "Starting Chinese translation using OpenCC for language: {}",
-        settings.selected_language
+        "Starting Chinese translation using OpenCC for languages: {:?}",
+        settings.selected_languages
     );
 
     // Use OpenCC to convert based on selected language
@@ -590,3 +628,94 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
     );
     map
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_language_code_to_name_known_codes() {
+        assert_eq!(language_code_to_name("en"), Some("English"));
+        assert_eq!(language_code_to_name("tl"), Some("Tagalog"));
+        assert_eq!(language_code_to_name("es"), Some("Spanish"));
+        assert_eq!(language_code_to_name("fr"), Some("French"));
+        assert_eq!(language_code_to_name("de"), Some("German"));
+        assert_eq!(language_code_to_name("ja"), Some("Japanese"));
+        assert_eq!(language_code_to_name("ko"), Some("Korean"));
+        assert_eq!(language_code_to_name("zh"), Some("Chinese"));
+        assert_eq!(language_code_to_name("zh-Hans"), Some("Chinese"));
+        assert_eq!(language_code_to_name("zh-Hant"), Some("Chinese"));
+        assert_eq!(language_code_to_name("pt"), Some("Portuguese"));
+        assert_eq!(language_code_to_name("it"), Some("Italian"));
+        assert_eq!(language_code_to_name("ru"), Some("Russian"));
+        assert_eq!(language_code_to_name("hi"), Some("Hindi"));
+        assert_eq!(language_code_to_name("vi"), Some("Vietnamese"));
+        assert_eq!(language_code_to_name("ar"), Some("Arabic"));
+        assert_eq!(language_code_to_name("th"), Some("Thai"));
+    }
+
+    #[test]
+    fn test_language_code_to_name_unknown() {
+        assert_eq!(language_code_to_name("xx"), None);
+        assert_eq!(language_code_to_name("zz"), None);
+    }
+
+    #[test]
+    fn test_build_system_prompt_single_language_no_append() {
+        let prompt = build_system_prompt("Fix the text.", &["en".to_string()]);
+        assert_eq!(prompt, "Fix the text.");
+        assert!(!prompt.contains("multiple languages"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_multi_language_appends_context() {
+        let prompt = build_system_prompt("Fix the text.", &["en".to_string(), "tl".to_string()]);
+        assert!(prompt.contains("Fix the text."));
+        assert!(prompt.contains("English and Tagalog"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_removes_output_placeholder() {
+        let prompt = build_system_prompt("Process this: ${output}", &["en".to_string()]);
+        assert!(!prompt.contains("${output}"));
+        assert_eq!(prompt, "Process this:");
+    }
+
+    #[test]
+    fn test_build_system_prompt_empty_languages() {
+        let prompt = build_system_prompt("Fix text.", &[]);
+        assert_eq!(prompt, "Fix text.");
+        assert!(!prompt.contains("multiple languages"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_unknown_language_codes_no_append() {
+        // Unknown codes return None from language_code_to_name,
+        // so lang_names will have < 2 entries → no append
+        let prompt = build_system_prompt("Fix text.", &["xx".to_string(), "yy".to_string()]);
+        assert!(!prompt.contains("multiple languages"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_three_languages() {
+        let prompt = build_system_prompt(
+            "Fix text.",
+            &["en".to_string(), "es".to_string(), "fr".to_string()],
+        );
+        assert!(prompt.contains("English"));
+        assert!(prompt.contains("Spanish"));
+        assert!(prompt.contains("French"));
+    }
+
+    #[test]
+    fn test_strip_invisible_chars() {
+        let input = "hello\u{200B}world\u{FEFF}";
+        assert_eq!(strip_invisible_chars(input), "helloworld");
+    }
+
+    #[test]
+    fn test_strip_invisible_chars_no_change() {
+        let input = "hello world";
+        assert_eq!(strip_invisible_chars(input), "hello world");
+    }
+}

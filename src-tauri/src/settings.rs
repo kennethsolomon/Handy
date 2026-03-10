@@ -303,8 +303,13 @@ pub struct AppSettings {
     pub selected_output_device: Option<String>,
     #[serde(default = "default_translate_to_english")]
     pub translate_to_english: bool,
-    #[serde(default = "default_selected_language")]
-    pub selected_language: String,
+    #[serde(
+        default = "default_selected_languages",
+        deserialize_with = "deserialize_selected_languages"
+    )]
+    pub selected_languages: Vec<String>,
+    #[serde(default)]
+    pub custom_initial_prompt: Option<String>,
     #[serde(default = "default_overlay_position")]
     pub overlay_position: OverlayPosition,
     #[serde(default = "default_debug_mode")]
@@ -388,8 +393,39 @@ fn default_update_checks_enabled() -> bool {
     true
 }
 
-fn default_selected_language() -> String {
-    "auto".to_string()
+fn default_selected_languages() -> Vec<String> {
+    vec!["auto".to_string()]
+}
+
+/// Deserializes `selected_languages` from either a bare `String` (old format)
+/// or a `Vec<String>` (new format) for backward compatibility.
+fn deserialize_selected_languages<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct SelectedLanguagesVisitor;
+
+    impl<'de> Visitor<'de> for SelectedLanguagesVisitor {
+        type Value = Vec<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("a string or array of strings")
+        }
+
+        fn visit_str<E: de::Error>(self, value: &str) -> Result<Vec<String>, E> {
+            Ok(vec![value.to_string()])
+        }
+
+        fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<String>, A::Error> {
+            let mut values = Vec::new();
+            while let Some(value) = seq.next_element::<String>()? {
+                values.push(value);
+            }
+            Ok(values)
+        }
+    }
+
+    deserializer.deserialize_any(SelectedLanguagesVisitor)
 }
 
 fn default_overlay_position() -> OverlayPosition {
@@ -561,11 +597,18 @@ fn default_post_process_models() -> HashMap<String, String> {
 }
 
 fn default_post_process_prompts() -> Vec<LLMPrompt> {
-    vec![LLMPrompt {
-        id: "default_improve_transcriptions".to_string(),
-        name: "Improve Transcriptions".to_string(),
-        prompt: "Clean this transcript:\n1. Fix spelling, capitalization, and punctuation errors\n2. Convert number words to digits (twenty-five → 25, ten percent → 10%, five dollars → $5)\n3. Replace spoken punctuation with symbols (period → ., comma → ,, question mark → ?)\n4. Remove filler words (um, uh, like as filler)\n5. Keep the language in the original version (if it was french, keep it in french for example)\n\nPreserve exact meaning and word order. Do not paraphrase or reorder content.\n\nReturn only the cleaned transcript.\n\nTranscript:\n${output}".to_string(),
-    }]
+    vec![
+        LLMPrompt {
+            id: "default_improve_transcriptions".to_string(),
+            name: "Improve Transcriptions".to_string(),
+            prompt: "Clean this transcript:\n1. Fix spelling, capitalization, and punctuation errors\n2. Convert number words to digits (twenty-five → 25, ten percent → 10%, five dollars → $5)\n3. Replace spoken punctuation with symbols (period → ., comma → ,, question mark → ?)\n4. Remove filler words (um, uh, like as filler)\n5. Keep the language in the original version (if it was french, keep it in french for example)\n\nPreserve exact meaning and word order. Do not paraphrase or reorder content.\n\nReturn only the cleaned transcript.\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_taglish_cleanup".to_string(),
+            name: "Taglish Cleanup".to_string(),
+            prompt: "Clean this Taglish (Tagalog-English) transcript:\n1. Fix spelling of Tagalog words (common misheard: \"yung\" not \"young\", \"natin\" not \"na tin\", \"kasi\" not \"cause see\")\n2. Fix English words that were misheard as Tagalog or vice versa\n3. Fix capitalization and punctuation\n4. Remove filler words (um, uh, ano, eh, di ba as filler)\n5. Keep the natural Taglish code-switching — do not translate Tagalog to English or vice versa\n\nPreserve exact meaning and word order. Do not paraphrase or reorder content.\n\nReturn only the cleaned transcript.\n\nTranscript:\n${output}".to_string(),
+        },
+    ]
 }
 
 fn default_typing_tool() -> TypingTool {
@@ -697,7 +740,8 @@ pub fn get_default_settings() -> AppSettings {
         clamshell_microphone: None,
         selected_output_device: None,
         translate_to_english: false,
-        selected_language: "auto".to_string(),
+        selected_languages: default_selected_languages(),
+        custom_initial_prompt: None,
         overlay_position: default_overlay_position(),
         debug_mode: false,
         log_level: default_log_level(),
@@ -869,5 +913,70 @@ mod tests {
         let settings = get_default_settings();
         assert!(!settings.auto_submit);
         assert_eq!(settings.auto_submit_key, AutoSubmitKey::Enter);
+    }
+
+    #[test]
+    fn default_selected_languages_is_auto() {
+        let settings = get_default_settings();
+        assert_eq!(settings.selected_languages, vec!["auto".to_string()]);
+    }
+
+    #[test]
+    fn default_custom_initial_prompt_is_none() {
+        let settings = get_default_settings();
+        assert!(settings.custom_initial_prompt.is_none());
+    }
+
+    #[test]
+    fn deserialize_selected_languages_from_string() {
+        // Old format: bare string "en" should become vec!["en"]
+        let json = r#"{"selected_languages": "en"}"#;
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(deserialize_with = "deserialize_selected_languages")]
+            selected_languages: Vec<String>,
+        }
+        let parsed: Partial = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.selected_languages, vec!["en".to_string()]);
+    }
+
+    #[test]
+    fn deserialize_selected_languages_from_array() {
+        // New format: array of strings
+        let json = r#"{"selected_languages": ["en", "tl"]}"#;
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(deserialize_with = "deserialize_selected_languages")]
+            selected_languages: Vec<String>,
+        }
+        let parsed: Partial = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            parsed.selected_languages,
+            vec!["en".to_string(), "tl".to_string()]
+        );
+    }
+
+    #[test]
+    fn deserialize_selected_languages_auto_string() {
+        let json = r#"{"selected_languages": "auto"}"#;
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(deserialize_with = "deserialize_selected_languages")]
+            selected_languages: Vec<String>,
+        }
+        let parsed: Partial = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.selected_languages, vec!["auto".to_string()]);
+    }
+
+    #[test]
+    fn deserialize_selected_languages_empty_array() {
+        let json = r#"{"selected_languages": []}"#;
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(deserialize_with = "deserialize_selected_languages")]
+            selected_languages: Vec<String>,
+        }
+        let parsed: Partial = serde_json::from_str(json).unwrap();
+        assert!(parsed.selected_languages.is_empty());
     }
 }
