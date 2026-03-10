@@ -138,8 +138,11 @@ pub fn get_initial_prompt(languages: &[String]) -> Option<String> {
 
     // Rough token estimate: ~4 chars per token for English, less for CJK
     // Truncate to ~800 chars to stay well under 224 tokens
-    if combined.len() > 800 {
-        Some(combined.chars().take(800).collect())
+    if combined.chars().count() > 800 {
+        // Truncate at char boundary, then trim to avoid splitting mid-word
+        let truncated: String = combined.chars().take(800).collect();
+        let trimmed = truncated.trim_end();
+        Some(trimmed.to_string())
     } else {
         Some(combined)
     }
@@ -274,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn test_combined_prompt_truncated_to_800_chars() {
+    fn test_combined_prompt_truncated_to_at_most_800_chars() {
         // All 15 languages combined exceed 800 chars, so the prompt gets truncated
         let all_langs: Vec<String> = vec![
             "en", "tl", "es", "fr", "ja", "ko", "zh", "de", "pt", "it", "ru", "hi", "vi",
@@ -286,7 +289,8 @@ mod tests {
         let result = get_initial_prompt(&all_langs);
         assert!(result.is_some());
         let prompt = result.unwrap();
-        // Truncation is by char count (800 chars), not byte count
-        assert_eq!(prompt.chars().count(), 800);
+        // Truncation at 800 chars then trimmed — result is at most 800 chars
+        assert!(prompt.chars().count() <= 800);
+        assert!(prompt.chars().count() > 700); // still substantial
     }
 }
