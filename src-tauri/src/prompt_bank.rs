@@ -197,4 +197,96 @@ mod tests {
         let result = get_initial_prompt(&["zh-Hans".to_string(), "en".to_string()]);
         assert!(result.is_some());
     }
+
+    #[test]
+    fn test_empty_languages_returns_none() {
+        assert!(get_initial_prompt(&[]).is_none());
+    }
+
+    #[test]
+    fn test_duplicate_languages_deduplicated() {
+        // Two identical languages after dedup → single language → None
+        let result = get_initial_prompt(&["en".to_string(), "en".to_string()]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_three_languages_combines_samples() {
+        let result =
+            get_initial_prompt(&["en".to_string(), "fr".to_string(), "de".to_string()]);
+        assert!(result.is_some());
+        let prompt = result.unwrap();
+        assert!(prompt.contains("Hello"));
+        assert!(prompt.contains("Bonjour"));
+        assert!(prompt.contains("Hallo"));
+    }
+
+    #[test]
+    fn test_unknown_language_code_returns_none() {
+        // Two unknown codes → no samples → None
+        let result = get_initial_prompt(&["xx".to_string(), "yy".to_string()]);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_one_known_one_unknown_returns_some() {
+        let result = get_initial_prompt(&["en".to_string(), "xx".to_string()]);
+        // Only one sample found → parts has 1 entry → not empty → Some
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_spanglish_pair_prompt() {
+        let result = get_initial_prompt(&["en".to_string(), "es".to_string()]);
+        assert!(result.is_some());
+        let prompt = result.unwrap();
+        assert!(prompt.contains("básicamente"));
+    }
+
+    #[test]
+    fn test_hinglish_pair_prompt() {
+        let result = get_initial_prompt(&["en".to_string(), "hi".to_string()]);
+        assert!(result.is_some());
+        let prompt = result.unwrap();
+        assert!(prompt.contains("humein"));
+    }
+
+    #[test]
+    fn test_normalize_lang_code_with_region() {
+        assert_eq!(normalize_lang_code("pt-BR"), "pt");
+        assert_eq!(normalize_lang_code("en-US"), "en");
+    }
+
+    #[test]
+    fn test_normalize_lang_code_with_underscore() {
+        assert_eq!(normalize_lang_code("zh_CN"), "zh");
+    }
+
+    #[test]
+    fn test_normalize_zh_hant() {
+        assert_eq!(normalize_lang_code("zh-Hant"), "zh");
+    }
+
+    #[test]
+    fn test_normalize_plain_code() {
+        assert_eq!(normalize_lang_code("en"), "en");
+        assert_eq!(normalize_lang_code("tl"), "tl");
+    }
+
+    #[test]
+    fn test_combined_prompt_truncated_to_800_chars() {
+        // All 15 languages combined exceed 800 chars, so the prompt gets truncated
+        let all_langs: Vec<String> = vec![
+            "en", "tl", "es", "fr", "ja", "ko", "zh", "de", "pt", "it", "ru", "hi", "vi",
+            "ar", "th",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        let result = get_initial_prompt(&all_langs);
+        assert!(result.is_some());
+        let prompt = result.unwrap();
+        // Truncation is by char count (800 chars), not byte count
+        assert_eq!(prompt.chars().count(), 800);
+    }
 }

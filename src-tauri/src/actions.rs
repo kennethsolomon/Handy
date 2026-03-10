@@ -628,3 +628,103 @@ pub static ACTION_MAP: Lazy<HashMap<String, Arc<dyn ShortcutAction>>> = Lazy::ne
     );
     map
 });
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_language_code_to_name_known_codes() {
+        assert_eq!(language_code_to_name("en"), Some("English"));
+        assert_eq!(language_code_to_name("tl"), Some("Tagalog"));
+        assert_eq!(language_code_to_name("es"), Some("Spanish"));
+        assert_eq!(language_code_to_name("fr"), Some("French"));
+        assert_eq!(language_code_to_name("de"), Some("German"));
+        assert_eq!(language_code_to_name("ja"), Some("Japanese"));
+        assert_eq!(language_code_to_name("ko"), Some("Korean"));
+        assert_eq!(language_code_to_name("zh"), Some("Chinese"));
+        assert_eq!(language_code_to_name("zh-Hans"), Some("Chinese"));
+        assert_eq!(language_code_to_name("zh-Hant"), Some("Chinese"));
+        assert_eq!(language_code_to_name("pt"), Some("Portuguese"));
+        assert_eq!(language_code_to_name("it"), Some("Italian"));
+        assert_eq!(language_code_to_name("ru"), Some("Russian"));
+        assert_eq!(language_code_to_name("hi"), Some("Hindi"));
+        assert_eq!(language_code_to_name("vi"), Some("Vietnamese"));
+        assert_eq!(language_code_to_name("ar"), Some("Arabic"));
+        assert_eq!(language_code_to_name("th"), Some("Thai"));
+    }
+
+    #[test]
+    fn test_language_code_to_name_unknown() {
+        assert_eq!(language_code_to_name("xx"), None);
+        assert_eq!(language_code_to_name("zz"), None);
+    }
+
+    #[test]
+    fn test_build_system_prompt_single_language_no_append() {
+        let prompt = build_system_prompt("Fix the text.", &["en".to_string()]);
+        assert_eq!(prompt, "Fix the text.");
+        assert!(!prompt.contains("multiple languages"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_multi_language_appends_context() {
+        let prompt = build_system_prompt(
+            "Fix the text.",
+            &["en".to_string(), "tl".to_string()],
+        );
+        assert!(prompt.contains("Fix the text."));
+        assert!(prompt.contains("English and Tagalog"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_removes_output_placeholder() {
+        let prompt = build_system_prompt(
+            "Process this: ${output}",
+            &["en".to_string()],
+        );
+        assert!(!prompt.contains("${output}"));
+        assert_eq!(prompt, "Process this:");
+    }
+
+    #[test]
+    fn test_build_system_prompt_empty_languages() {
+        let prompt = build_system_prompt("Fix text.", &[]);
+        assert_eq!(prompt, "Fix text.");
+        assert!(!prompt.contains("multiple languages"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_unknown_language_codes_no_append() {
+        // Unknown codes return None from language_code_to_name,
+        // so lang_names will have < 2 entries → no append
+        let prompt = build_system_prompt(
+            "Fix text.",
+            &["xx".to_string(), "yy".to_string()],
+        );
+        assert!(!prompt.contains("multiple languages"));
+    }
+
+    #[test]
+    fn test_build_system_prompt_three_languages() {
+        let prompt = build_system_prompt(
+            "Fix text.",
+            &["en".to_string(), "es".to_string(), "fr".to_string()],
+        );
+        assert!(prompt.contains("English"));
+        assert!(prompt.contains("Spanish"));
+        assert!(prompt.contains("French"));
+    }
+
+    #[test]
+    fn test_strip_invisible_chars() {
+        let input = "hello\u{200B}world\u{FEFF}";
+        assert_eq!(strip_invisible_chars(input), "helloworld");
+    }
+
+    #[test]
+    fn test_strip_invisible_chars_no_change() {
+        let input = "hello world";
+        assert_eq!(strip_invisible_chars(input), "hello world");
+    }
+}

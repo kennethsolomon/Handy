@@ -914,4 +914,69 @@ mod tests {
         assert!(!settings.auto_submit);
         assert_eq!(settings.auto_submit_key, AutoSubmitKey::Enter);
     }
+
+    #[test]
+    fn default_selected_languages_is_auto() {
+        let settings = get_default_settings();
+        assert_eq!(settings.selected_languages, vec!["auto".to_string()]);
+    }
+
+    #[test]
+    fn default_custom_initial_prompt_is_none() {
+        let settings = get_default_settings();
+        assert!(settings.custom_initial_prompt.is_none());
+    }
+
+    #[test]
+    fn deserialize_selected_languages_from_string() {
+        // Old format: bare string "en" should become vec!["en"]
+        let json = r#"{"selected_languages": "en"}"#;
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(deserialize_with = "deserialize_selected_languages")]
+            selected_languages: Vec<String>,
+        }
+        let parsed: Partial = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.selected_languages, vec!["en".to_string()]);
+    }
+
+    #[test]
+    fn deserialize_selected_languages_from_array() {
+        // New format: array of strings
+        let json = r#"{"selected_languages": ["en", "tl"]}"#;
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(deserialize_with = "deserialize_selected_languages")]
+            selected_languages: Vec<String>,
+        }
+        let parsed: Partial = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            parsed.selected_languages,
+            vec!["en".to_string(), "tl".to_string()]
+        );
+    }
+
+    #[test]
+    fn deserialize_selected_languages_auto_string() {
+        let json = r#"{"selected_languages": "auto"}"#;
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(deserialize_with = "deserialize_selected_languages")]
+            selected_languages: Vec<String>,
+        }
+        let parsed: Partial = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.selected_languages, vec!["auto".to_string()]);
+    }
+
+    #[test]
+    fn deserialize_selected_languages_empty_array() {
+        let json = r#"{"selected_languages": []}"#;
+        #[derive(Deserialize)]
+        struct Partial {
+            #[serde(deserialize_with = "deserialize_selected_languages")]
+            selected_languages: Vec<String>,
+        }
+        let parsed: Partial = serde_json::from_str(json).unwrap();
+        assert!(parsed.selected_languages.is_empty());
+    }
 }
