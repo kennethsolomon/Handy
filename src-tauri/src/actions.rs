@@ -669,20 +669,14 @@ mod tests {
 
     #[test]
     fn test_build_system_prompt_multi_language_appends_context() {
-        let prompt = build_system_prompt(
-            "Fix the text.",
-            &["en".to_string(), "tl".to_string()],
-        );
+        let prompt = build_system_prompt("Fix the text.", &["en".to_string(), "tl".to_string()]);
         assert!(prompt.contains("Fix the text."));
         assert!(prompt.contains("English and Tagalog"));
     }
 
     #[test]
     fn test_build_system_prompt_removes_output_placeholder() {
-        let prompt = build_system_prompt(
-            "Process this: ${output}",
-            &["en".to_string()],
-        );
+        let prompt = build_system_prompt("Process this: ${output}", &["en".to_string()]);
         assert!(!prompt.contains("${output}"));
         assert_eq!(prompt, "Process this:");
     }
@@ -698,10 +692,7 @@ mod tests {
     fn test_build_system_prompt_unknown_language_codes_no_append() {
         // Unknown codes return None from language_code_to_name,
         // so lang_names will have < 2 entries → no append
-        let prompt = build_system_prompt(
-            "Fix text.",
-            &["xx".to_string(), "yy".to_string()],
-        );
+        let prompt = build_system_prompt("Fix text.", &["xx".to_string(), "yy".to_string()]);
         assert!(!prompt.contains("multiple languages"));
     }
 

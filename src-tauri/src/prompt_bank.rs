@@ -215,8 +215,7 @@ mod tests {
 
     #[test]
     fn test_three_languages_combines_samples() {
-        let result =
-            get_initial_prompt(&["en".to_string(), "fr".to_string(), "de".to_string()]);
+        let result = get_initial_prompt(&["en".to_string(), "fr".to_string(), "de".to_string()]);
         assert!(result.is_some());
         let prompt = result.unwrap();
         assert!(prompt.contains("Hello"));
@@ -280,8 +279,8 @@ mod tests {
     fn test_combined_prompt_truncated_to_at_most_800_chars() {
         // All 15 languages combined exceed 800 chars, so the prompt gets truncated
         let all_langs: Vec<String> = vec![
-            "en", "tl", "es", "fr", "ja", "ko", "zh", "de", "pt", "it", "ru", "hi", "vi",
-            "ar", "th",
+            "en", "tl", "es", "fr", "ja", "ko", "zh", "de", "pt", "it", "ru", "hi", "vi", "ar",
+            "th",
         ]
         .into_iter()
         .map(String::from)
