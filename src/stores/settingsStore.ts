@@ -103,8 +103,10 @@ const settingUpdaters: {
     commands.updateRecordingRetentionPeriod(value as string),
   translate_to_english: (value) =>
     commands.changeTranslateToEnglishSetting(value as boolean),
-  selected_language: (value) =>
-    commands.changeSelectedLanguageSetting(value as string),
+  selected_languages: (value) =>
+    commands.changeSelectedLanguagesSetting(value as string[]),
+  custom_initial_prompt: (value) =>
+    commands.changeCustomInitialPromptSetting(value as string | null),
   overlay_position: (value) =>
     commands.changeOverlayPositionSetting(value as string),
   debug_mode: (value) => commands.changeDebugModeSetting(value as boolean),

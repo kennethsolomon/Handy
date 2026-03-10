@@ -170,12 +170,19 @@
         }
       },
       "language": {
-        "title": "Language",
-        "description": "Select the language for speech recognition. Auto will automatically determine the language, while selecting a specific language can improve accuracy for that language.",
+        "title": "Languages",
+        "description": "Select one or more languages for speech recognition. Selecting multiple languages enables code-switching support (e.g., Taglish).",
         "descriptionUnsupported": "Parakeet model automatically detects the language. No manual selection is needed.",
         "searchPlaceholder": "Search languages...",
         "noResults": "No languages found",
-        "auto": "Auto"
+        "auto": "Auto Detect",
+        "presets": "Presets",
+        "advancedOptions": "Advanced Transcription Options",
+        "initialPrompt": {
+          "title": "Initial Prompt",
+          "description": "Custom text to bias the transcription model. Overrides the auto-generated prompt. Leave blank for language-based auto.",
+          "placeholder": "e.g., Okay so ang gagawin natin is i-open yung settings..."
+        }
       },
       "pushToTalk": {
         "label": "Push To Talk",

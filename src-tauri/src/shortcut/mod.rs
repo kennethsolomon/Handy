@@ -525,9 +525,24 @@ pub fn change_translate_to_english_setting(app: AppHandle, enabled: bool) -> Res
 
 #[tauri::command]
 #[specta::specta]
-pub fn change_selected_language_setting(app: AppHandle, language: String) -> Result<(), String> {
+pub fn change_selected_languages_setting(
+    app: AppHandle,
+    languages: Vec<String>,
+) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
-    settings.selected_language = language;
+    settings.selected_languages = languages;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_custom_initial_prompt_setting(
+    app: AppHandle,
+    prompt: Option<String>,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.custom_initial_prompt = prompt;
     settings::write_settings(&app, settings);
     Ok(())
 }

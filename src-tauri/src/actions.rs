@@ -52,8 +52,46 @@ fn strip_invisible_chars(s: &str) -> String {
 
 /// Build a system prompt from the user's prompt template.
 /// Removes `${output}` placeholder since the transcription is sent as the user message.
-fn build_system_prompt(prompt_template: &str) -> String {
-    prompt_template.replace("${output}", "").trim().to_string()
+/// When multiple languages are selected, appends language context to help the LLM.
+fn build_system_prompt(prompt_template: &str, selected_languages: &[String]) -> String {
+    let mut prompt = prompt_template.replace("${output}", "").trim().to_string();
+
+    // Append language context when multiple languages are selected
+    if selected_languages.len() > 1 {
+        let lang_names: Vec<&str> = selected_languages
+            .iter()
+            .filter_map(|code| language_code_to_name(code))
+            .collect();
+        if lang_names.len() > 1 {
+            prompt.push_str(&format!(
+                "\n\nNote: This transcription may contain multiple languages ({}).",
+                lang_names.join(" and ")
+            ));
+        }
+    }
+
+    prompt
+}
+
+fn language_code_to_name(code: &str) -> Option<&'static str> {
+    match code {
+        "en" => Some("English"),
+        "tl" => Some("Tagalog"),
+        "es" => Some("Spanish"),
+        "fr" => Some("French"),
+        "de" => Some("German"),
+        "ja" => Some("Japanese"),
+        "ko" => Some("Korean"),
+        "zh" | "zh-Hans" | "zh-Hant" => Some("Chinese"),
+        "pt" => Some("Portuguese"),
+        "it" => Some("Italian"),
+        "ru" => Some("Russian"),
+        "hi" => Some("Hindi"),
+        "vi" => Some("Vietnamese"),
+        "ar" => Some("Arabic"),
+        "th" => Some("Thai"),
+        _ => None,
+    }
 }
 
 async fn post_process_transcription(settings: &AppSettings, transcription: &str) -> Option<String> {
@@ -121,7 +159,7 @@ async fn post_process_transcription(settings: &AppSettings, transcription: &str)
     if provider.supports_structured_output {
         debug!("Using structured outputs for provider '{}'", provider.id);
 
-        let system_prompt = build_system_prompt(&prompt);
+        let system_prompt = build_system_prompt(&prompt, &settings.selected_languages);
         let user_content = transcription.to_string();
 
         // Handle Apple Intelligence separately since it uses native Swift APIs
@@ -269,17 +307,17 @@ async fn maybe_convert_chinese_variant(
     transcription: &str,
 ) -> Option<String> {
     // Check if language is set to Simplified or Traditional Chinese
-    let is_simplified = settings.selected_language == "zh-Hans";
-    let is_traditional = settings.selected_language == "zh-Hant";
+    let is_simplified = settings.selected_languages.contains(&"zh-Hans".to_string());
+    let is_traditional = settings.selected_languages.contains(&"zh-Hant".to_string());
 
     if !is_simplified && !is_traditional {
-        debug!("selected_language is not Simplified or Traditional Chinese; skipping translation");
+        debug!("selected_languages does not contain Simplified or Traditional Chinese; skipping translation");
         return None;
     }
 
     debug!(
-        "Starting Chinese translation using OpenCC for language: {}",
-        settings.selected_language
+        "Starting Chinese translation using OpenCC for languages: {:?}",
+        settings.selected_languages
     );
 
     // Use OpenCC to convert based on selected language
